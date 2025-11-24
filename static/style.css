@@ -1,0 +1,14 @@
+body {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    min-height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+}
+.text-shadow { text-shadow: 3px 3px 10px rgba(0,0,0,0.7); }
+.card {
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    transition: all 0.3s;
+}
+.card:hover { transform: translateY(-5px); }
+#alert { animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.8; } }

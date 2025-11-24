@@ -1,0 +1,6 @@
+requests
+beautifulsoup4
+google-generativeai
+python-telegram-bot>=22.0
+apscheduler
+nest-asyncio
