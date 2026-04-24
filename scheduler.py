@@ -1,91 +1,43 @@
+# scheduler.py - SINGLETON PATTERN
 
+import threading
+from apscheduler.schedulers.background import BackgroundScheduler
+from email_service import send_daily_email
+import time
+from template_method import daily_processor
 
-import asyncio
-import sqlite3
-from config import TELEGRAM_TOKEN, DB_PATH
-from apscheduler.schedulers.blocking import BlockingScheduler
-from telegram import Bot
-from db import init_db, was_sent, mark_as_sent
-from crawler.cafef import crawl_news
-from ai_summarizer import summarize
+class NewsScheduler:
+    """=== SINGLETON PATTERN ==="""
+    _instance = None          # Lưu instance duy nhất
+    _lock = threading.Lock()  # Đảm bảo thread-safe
+    _is_running = False
 
-bot = Bot(token=TELEGRAM_TOKEN)
+    def __new__(cls):
+        """Phương thức tạo instance - chỉ cho phép tạo 1 lần"""
+        if cls._instance is None:
+            with cls._lock:                    # Khóa để tránh race condition
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance.scheduler = BackgroundScheduler()
+        return cls._instance                   # Luôn trả về cùng 1 instance
 
+    def start(self):
+        """Khởi động scheduler (chỉ chạy 1 lần)"""
+        if self._is_running:
+            print("✅ Scheduler đã chạy rồi, bỏ qua...")
+            return
 
-def get_active_chat_ids():
-    """Lấy tất cả chat_id có watchlist (tức là đã /watch hoặc /start)"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT DISTINCT chat_id FROM users WHERE watchlist IS NOT NULL AND trim(watchlist) != ''")
-        rows = c.fetchall()
-        conn.close()
-        return [row[0] for row in rows] if rows else []
-    except:
-        return []
+        self.scheduler.add_job(daily_job, 'cron', hour=7, minute=30)
+        self.scheduler.add_job(daily_job, 'cron', hour=19, minute=30)
+        self.scheduler.start()
+        self._is_running = True
+        print("✅ Singleton Scheduler đã khởi động thành công!")
 
-
-async def send_message(chat_id, text):
-    try:
-        await bot.send_message(chat_id=chat_id, text=text, disable_web_page_preview=True)
-        print(f"   Đã gửi thành công đến {chat_id}")
-    except Exception as e:
-        print(f"   Lỗi gửi cho {chat_id}: {e}")
-
-
+# Hàm daily_job (giữ để app.py import được)
 def daily_job():
-    print("Bắt đầu crawl tin mới...")
-    init_db()
-    articles = crawl_news()
-    print(f"→ Tìm được {len(articles)} tin nóng có mã ")
+    print("Bắt đầu crawl và gửi tin nóng...")
+    daily_processor.process()          # ← Dùng Template Method
+    print("Hoàn thành gửi tin hôm nay!")
 
-    active_chat_ids = get_active_chat_ids()
-    if not active_chat_ids:
-        print("   Chưa có người dùng nào /watch → không gửi tin")
-        return
-
-    for article in articles:
-        if was_sent(article['url']):
-            continue
-
-        summary = summarize(article['title'], article['url'])
-        print(f"Đang gửi tin: {summary.splitlines()[0][:80]}...")
-
-        # Lấy watchlist của từng người dùng
-        for chat_id in active_chat_ids:
-            try:
-                conn = sqlite3.connect(DB_PATH)
-                c = conn.cursor()
-                c.execute("SELECT watchlist FROM users WHERE chat_id = ?", (chat_id,))
-                row = c.fetchone()
-                conn.close()
-
-                if not row or not row[0]:
-                    continue
-                watchlist = [code.strip() for code in row[0].split(",") if code.strip()]
-
-                if any(code in article['codes'] for code in watchlist):
-                    asyncio.run(send_message(chat_id, summary))
-                    asyncio.run(asyncio.sleep(10))  # chống flood
-            except Exception as e:
-                print(f"   Lỗi xử lý user {chat_id}: {e}")
-
-        mark_as_sent(article['url'])
-    print("Hoàn thành gửi tin hôm nay!\n")
-
-
-if __name__ == "__main__":
-    init_db()
-
-    scheduler = BlockingScheduler()
-    scheduler.add_job(daily_job, 'cron', hour=8,  minute=0,  timezone="Asia/Ho_Chi_Minh")
-    scheduler.add_job(daily_job, 'cron', hour=20, minute=0,  timezone="Asia/Ho_Chi_Minh")
-
-    print("StockDigest Scheduler đang chạy – sẽ gửi tin lúc 8h sáng & 8h tối")
-    print("Người dùng hiện tại sẽ nhận tin:", get_active_chat_ids() or "Chưa có ai")
-
-    daily_job()  # chạy luôn lần đầu để test
-    try:
-        scheduler.start()
-    except (KeyboardInterrupt, SystemExit):
-        print("Scheduler đã dừng.")
+# Tạo instance Singleton (chỉ tạo 1 lần duy nhất)
+scheduler = NewsScheduler()

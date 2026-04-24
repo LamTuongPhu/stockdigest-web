@@ -53,7 +53,7 @@ def crawl_news():
                 extra_codes = {code for code in BIG_STOCKS if code in title_upper}
                 codes.update(extra_codes)
 
-                # Từ khóa quan trọng (thêm nhiều hơn)
+                # Từ khóa quan trọng
                 keywords = [
                     'cổ tức', 'lợi nhuận', 'chia cổ tức', 'kết quả kinh doanh',
                     'niêm yết', 'thoái vốn', 'tăng vốn', 'chia tách', 'phát hành',
@@ -68,7 +68,7 @@ def crawl_news():
                         'source': base_url.split('.')[0].upper()
                     })
 
-                    # DEBUG: in ra để bạn thấy mã nào được bắt
+                    # DEBUG: in ra để thấy mã nào được bắt
                     if codes:
                         print(f"   Tin có mã: {sorted(codes)} → {title[:70]}...")
 

@@ -1,25 +1,60 @@
-# ai_summarizer.py
-import google.generativeai as genai
-from config import GEMINI_API_KEY
+# ai_summarizer.py - STRATEGY + PROXY + DECORATOR + ADAPTER
+from abc import ABC, abstractmethod
 import time
+from adapter import GeminiAdapter   # ← Adapter mới
 
-genai.configure(api_key=GEMINI_API_KEY)
+# ====================== STRATEGY INTERFACE ======================
+class SummarizerStrategy(ABC):
+    @abstractmethod
+    def summarize(self, title: str, url: str) -> str:
+        pass
 
-# Model mới nhất, miễn phí, siêu nhanh
-model = genai.GenerativeModel('gemini-2.5-flash-lite')
+# ====================== CONCRETE STRATEGY (dùng Adapter) ======================
+class GeminiStrategy(SummarizerStrategy):
+    def __init__(self):
+        self.adapter = GeminiAdapter()   # Sử dụng Adapter
 
+    def summarize(self, title: str, url: str) -> str:
+        return self.adapter.summarize(title, url)
 
-def summarize(title, url):
-    prompt = f"Tóm tắt tin chứng khoán trong 1-2 câu cực dễ hiểu cho người mới, thêm emoji, chỉ dùng tiếng Việt:\n{title}"
+# ====================== PROXY + DECORATOR (giữ nguyên) ======================
+class SummarizerProxy(SummarizerStrategy):
+    def __init__(self, strategy: SummarizerStrategy):
+        self._strategy = strategy
+        self._cache = {}
 
-    for _ in range(3):
-        try:
-            response = model.generate_content(prompt)
-            if response.text:
-                return response.text.strip() + "\n\n" + url
-        except Exception as e:
-            print(f"   Gemini lỗi (thử lại): {e}")
-            time.sleep(2)
+    def summarize(self, title: str, url: str) -> str:
+        key = title + url
+        if key in self._cache:
+            print(f"✅ Proxy: Cache hit")
+            return self._cache[key]
+        result = self._strategy.summarize(title, url)
+        self._cache[key] = result
+        return result
 
-    # Fallback cuối cùng – vẫn gửi được tin
-    return f"Tin nóng: {title}\n{url}"
+class SummarizerDecorator(SummarizerStrategy):
+    def __init__(self, wrapped: SummarizerStrategy):
+        self._wrapped = wrapped
+
+    def summarize(self, title: str, url: str) -> str:
+        start = time.time()
+        result = self._wrapped.summarize(title, url)
+        duration = round(time.time() - start, 2)
+        return f"⏱️ [{duration}s] 🔥 {result}"
+
+# ====================== CONTEXT ======================
+class SummarizerContext:
+    def __init__(self, strategy: SummarizerStrategy):
+        self._strategy = strategy
+
+    def summarize(self, title: str, url: str) -> str:
+        return self._strategy.summarize(title, url)
+
+# ====================== SỬ DỤNG ======================
+base = GeminiStrategy()
+proxy = SummarizerProxy(base)
+decorated = SummarizerDecorator(proxy)
+summarizer = SummarizerContext(decorated)
+
+def summarize(title: str, url: str) -> str:
+    return summarizer.summarize(title, url)
